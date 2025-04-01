@@ -109,7 +109,7 @@ class GameHacker:
         """
         ...
 
-    def fix_cr3(self) -> bool:
+    def fix_cr3(self, cache_pml4: bool = False) -> bool:
         """
         Attempt to fix CR3 for the current process.
         

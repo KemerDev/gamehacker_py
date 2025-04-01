@@ -198,7 +198,7 @@ bool GameHacker::SetFPGA()
 	return true;
 }
 
-bool GameHacker::InitFPGA(std::string process_name, bool memMap = true, bool debug = false, bool cache_pml4 = false)
+bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug, bool cache_pml4)
 {
 
     if (!DMA_INITIALIZED)
@@ -301,20 +301,7 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap = true, bool deb
 
 	this->current_process.process_name = process_name;
 
-	if (cache_pml4)
-	{
-		if (!this->FixCr3(true))
-			std::cout << "Failed to fix CR3" << std::endl;
-		else
-			std::cout << "CR3 fixed, PML4 cached" << std::endl;
-	}
-	else
-	{
-		if (!this->FixCr3(false))
-		std::cout << "Failed to fix CR3" << std::endl;
-	else
-		std::cout << "CR3 fixed" << std::endl;
-	}
+	cache_pml4 ? this->FixCr3(true) : this->FixCr3(false);
 
 	LOG("[...] Getting process information...\n");
 
@@ -486,7 +473,7 @@ struct Info
 	std::string name;
 };
 
-bool GameHacker::FixCr3(bool cache_pml4 = false)
+bool GameHacker::FixCr3(bool cache_pml4)
 {
 	PVMMDLL_MAP_MODULEENTRY module_entry;
 	bool result = VMMDLL_Map_GetModuleFromNameU(this->current_process.vHandle, this->current_process.PID, (LPSTR)this->current_process.process_name.c_str(), &module_entry, NULL);
