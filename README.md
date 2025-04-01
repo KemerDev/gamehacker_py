@@ -43,6 +43,9 @@ print(hex(result)) # 0x30d480
 result = gh.find_signature("48 8B BF ? ? ? ? 48 8B", info.base_address, info.base_size, False, info.PID)
 
 print(hex(result)) # 0x30d480
+
+# Dump process memory
+hacker.dump_memory()
 ```
 
 ## API Reference
