@@ -612,7 +612,7 @@ std::string get_path() {
 	return std::string(buffer).substr(0, ++pos);
 }
 
-bool GameHacker::DumpMemory(uintptr_t address, std::string path)
+bool GameHacker::DumpMemory()
 {
 	LOG("Dumping memory of process %s\n", this->current_process.process_name.c_str());
 

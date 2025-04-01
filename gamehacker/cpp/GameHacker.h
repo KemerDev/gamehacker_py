@@ -32,7 +32,7 @@ public:
     uintptr_t GetImportTableAddress(std::string import, std::string process, std::string module);
     bool FixCr3(bool cache_pml4 = false);
     bool VirtToPhys(uint64_t va, uint64_t& pa);
-    bool DumpMemory(uintptr_t address, std::string path);
+    bool DumpMemory();
     ULONG64 FindSignature(const char* signature, uint64_t range_start, size_t size, bool heap_function, int PID);
 
     bool Write(uintptr_t address, void* buffer, size_t size) const;
