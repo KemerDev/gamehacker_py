@@ -1,11 +1,12 @@
 # GameHacker
 
-GameHacker is a Python module designed for interacting with game memory. It provides tools for reading and modifying memory values, making it useful for debugging, cheating, or automation in game environments.
+GameHacker is a Python module designed for interacting with game memory using a DMA device. It provides tools for reading and modifying memory values, making it useful for debugging, cheating, or automation in game environments.
 
 ## Features
 - Retrieve current process information
 - Initialize FPGA for memory access
 - Support for memory mapping and debugging
+- Dump process memory to file
 
 ## Installation
 To install GameHacker, use pip:
