@@ -42,6 +42,19 @@ std::string GetPydPath() {
     return std::string(file_path);
 }
 
+std::string GetPyScriptPath() {
+    PyObject* globals = PyEval_GetGlobals();
+    if (globals) {
+        PyObject* pyFileName = PyDict_GetItemString(globals, "__file__");
+        if (pyFileName && PyUnicode_Check(pyFileName)) {
+            std::string script_path = PyUnicode_AsUTF8(pyFileName);
+            size_t pos = script_path.find_last_of("\\/");
+            return script_path.substr(0, ++pos);  // Return only the directory
+        }
+    }
+    return "";
+}
+
 GameHacker::GameHacker() {
     std::filesystem::path libs_path;
 
@@ -605,14 +618,7 @@ bool GameHacker::VirtToPhys(uint64_t va, uint64_t& pa)
 	return false;
 }
 
-std::string get_path() {
-	char buffer[MAX_PATH];
-	GetModuleFileNameA(NULL, buffer, MAX_PATH);
-	std::string::size_type pos = std::string(buffer).find_last_of("\\/");
-	return std::string(buffer).substr(0, ++pos);
-}
-
-bool GameHacker::DumpMemory()
+bool GameHacker::DumpMemory(const std::string& path)
 {
 	LOG("Dumping memory of process %s\n", this->current_process.process_name.c_str());
 
@@ -707,8 +713,23 @@ bool GameHacker::DumpMemory()
         }
     }
 
+	std::string dumpPath;
+
+	if (!path.empty())
+	{
+		dumpPath = path;
+	}
+	else
+	{
+		dumpPath = GetPyScriptPath();
+	}
+
+	if (dumpPath.back() != '\\' && dumpPath.back() != '/') {
+		dumpPath += "\\";
+	}
+
     char FileName[MAX_PATH];
-    sprintf_s(FileName, "%s%s_dump.exe", get_path().c_str(), this->current_process.process_name.c_str());
+    sprintf_s(FileName, "%s%s_dump.exe", dumpPath.c_str(), this->current_process.process_name.c_str());
     
     std::ofstream Dump(FileName, std::ios::binary);
     Dump.write((char*)buffer, this->current_process.base_size);

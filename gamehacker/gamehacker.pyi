@@ -129,12 +129,11 @@ class GameHacker:
             Tuple[bool, int]: (success, physical_address)
         """
         ...
-    def dump_memory(self) -> None:
+    def dump_memory(self, path: str = "") -> None:
         """
         Dump process memory to file.
         
         Args:
-            address: Starting address to dump
             path: Output file path
             
         Returns:
