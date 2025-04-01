@@ -44,7 +44,7 @@ result = gh.find_signature("48 8B BF ? ? ? ? 48 8B", info.base_address, info.bas
 
 print(hex(result)) # 0x30d480
 
-# Dump process memory
+# Dump process memory and save it to file
 hacker.dump_memory()
 ```
 
