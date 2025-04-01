@@ -1,0 +1,4 @@
+/.venv
+/build
+/dist
+/gamehacker.egg-info
