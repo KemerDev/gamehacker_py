@@ -11,7 +11,7 @@ GameHacker is a Python module designed for interacting with game memory. It prov
 To install GameHacker, use pip:
 
 ```sh
-pip install gamehacker
+pip install gamehacker_py
 ```
 
 ## Usage
@@ -20,20 +20,30 @@ pip install gamehacker
 from gamehacker import GameHacker
 
 gh = GameHacker()
-if gh.init_fpga("game.exe", memMap=True, debug=True):
+if gh.init_fpga("process.exe", memMap=True, debug=False, fixcr3=False):
     print("FPGA initialized successfully.")
+
+info = gh.current_process_info
+
+info.base_address
+info.base_size
+info.PID
+info.process_name
+
+result = gh.read(0x14401c990, 4)
+
+print(struct.unpack("I", result))[0] # convert return buffer bytes to uint32 value
+
+result = gh.find_signature("48 8B 1D ? ? ? ? 48 89 5C 24", info.base_address, info.base_size, True, info.PID)
+
+print(hex(result)) # 0x30d480
+
+result = hacker.find_signature("48 8B BF ? ? ? ? 48 8B", info.base_address, info.base_size, False, info.PID)
+
+print(hex(result)) # 0x30d480
 ```
 
 ## API Reference
-
-### `class CurrentProcessInformation`
-Represents information about the current process.
-
-#### Attributes:
-- `PID (int)`: Process ID
-- `base_address (int)`: Base memory address
-- `base_size (int)`: Size of the process memory
-- `process_name (str)`: Name of the process
 
 ### `class GameHacker`
 Main class for interacting with game memory.

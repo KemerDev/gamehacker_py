@@ -164,7 +164,7 @@ class GameHacker:
         """
         ...
 
-    def read(self, address: int, size: int, format: str) -> bytes:
+    def read(self, address: int, size: int) -> bytes:
         """
         Read from process memory.
         
@@ -179,7 +179,7 @@ class GameHacker:
         """
         ...
 
-    def read_with_pid(self, address: int, size: int, format: str, pid: int) -> bytes:
+    def read_with_pid(self, address: int, size: int, pid: int) -> bytes:
         """
         Read from process memory.
         
