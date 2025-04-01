@@ -198,7 +198,7 @@ bool GameHacker::SetFPGA()
 	return true;
 }
 
-bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug, bool fixcr3)
+bool GameHacker::InitFPGA(std::string process_name, bool memMap = true, bool debug = false, bool cache_pml4 = false)
 {
 
     if (!DMA_INITIALIZED)
@@ -301,12 +301,19 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug, boo
 
 	this->current_process.process_name = process_name;
 
-	if (fixcr3)
+	if (cache_pml4)
 	{
-		if (!this->FixCr3())
+		if (!this->FixCr3(true))
 			std::cout << "Failed to fix CR3" << std::endl;
 		else
-			std::cout << "CR3 fixed" << std::endl;
+			std::cout << "CR3 fixed, PML4 cached" << std::endl;
+	}
+	else
+	{
+		if (!this->FixCr3(false))
+		std::cout << "Failed to fix CR3" << std::endl;
+	else
+		std::cout << "CR3 fixed" << std::endl;
 	}
 
 	LOG("[...] Getting process information...\n");
@@ -479,7 +486,7 @@ struct Info
 	std::string name;
 };
 
-bool GameHacker::FixCr3()
+bool GameHacker::FixCr3(bool cache_pml4 = false)
 {
 	PVMMDLL_MAP_MODULEENTRY module_entry;
 	bool result = VMMDLL_Map_GetModuleFromNameU(this->current_process.vHandle, this->current_process.PID, (LPSTR)this->current_process.process_name.c_str(), &module_entry, NULL);
@@ -551,42 +558,50 @@ bool GameHacker::FixCr3()
 		auto dtb = possible_dtbs[i];
 		VMMDLL_ConfigSet(this->current_process.vHandle, VMMDLL_OPT_PROCESS_DTB | this->current_process.PID, dtb);
 		result = VMMDLL_Map_GetModuleFromNameU(this->current_process.vHandle, this->current_process.PID, (LPSTR)this->current_process.process_name.c_str(), &module_entry, NULL);
+
 		if (result)
 		{
 			LOG("[+] Patched DTB\n");
-			static ULONG64 pml4_first[512];
-			static ULONG64 pml4_second[512];
-			DWORD readsize;
 
-			LOG("[+] Reading PML4 table from DTB: 0x%llx\n", dtb);
+			if (cache_pml4)
+			{
+				static ULONG64 pml4_first[512];
+				static ULONG64 pml4_second[512];
+				DWORD readsize;
+	
+				LOG("[+] Reading PML4 table from DTB: 0x%llx\n", dtb);
+	
+				if (!VMMDLL_MemReadEx(this->current_process.vHandle, -1, dtb, reinterpret_cast<PBYTE>(pml4_first), sizeof(pml4_first), (PDWORD)&readsize,
+					VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
+					LOG("[!] Failed to read PML4 the first time\n");
+					return false;
+				}
+				LOG("[+] First PML4 read successful, size: %d\n", readsize);
+	
+				if (!VMMDLL_MemReadEx(this->current_process.vHandle, -1, dtb, reinterpret_cast<PBYTE>(pml4_second), sizeof(pml4_second), (PDWORD)&readsize,
+					VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
+					LOG("[!] Failed to read PML4 the second time\n");
+					return false;
+				}
+				LOG("[+] Second PML4 read successful, size: %d\n", readsize);
+	
+				if (memcmp(pml4_first, pml4_second, sizeof(pml4_first)) != 0) {
+					LOG("[!] PML4 mismatch between reads\n");
+					return false;
+				}
+				LOG("[+] PML4 verification successful, tables match\n");
+	
+				LOG("[+] Setting up PML4 cache\n");
+				VMMDLL_MemReadEx((VMM_HANDLE)-666, 333, (ULONG64)pml4_first, 0, 0, 0, 0);
+	
+				LOG("[+] Configuring process DTB\n");
+				VMMDLL_ConfigSet(this->current_process.vHandle, VMMDLL_OPT_PROCESS_DTB | this->current_process.PID, 666);
+	
+				LOG("[+] Cache initialization complete\n");
 
-			if (!VMMDLL_MemReadEx(this->current_process.vHandle, -1, dtb, reinterpret_cast<PBYTE>(pml4_first), sizeof(pml4_first), (PDWORD)&readsize,
-				VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
-				LOG("[!] Failed to read PML4 the first time\n");
-				return false;
+				return true;
 			}
-			LOG("[+] First PML4 read successful, size: %d\n", readsize);
 
-			if (!VMMDLL_MemReadEx(this->current_process.vHandle, -1, dtb, reinterpret_cast<PBYTE>(pml4_second), sizeof(pml4_second), (PDWORD)&readsize,
-				VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
-				LOG("[!] Failed to read PML4 the second time\n");
-				return false;
-			}
-			LOG("[+] Second PML4 read successful, size: %d\n", readsize);
-
-			if (memcmp(pml4_first, pml4_second, sizeof(pml4_first)) != 0) {
-				LOG("[!] PML4 mismatch between reads\n");
-				return false;
-			}
-			LOG("[+] PML4 verification successful, tables match\n");
-
-			LOG("[+] Setting up PML4 cache\n");
-			VMMDLL_MemReadEx((VMM_HANDLE)-666, 333, (ULONG64)pml4_first, 0, 0, 0, 0);
-
-			LOG("[+] Configuring process DTB\n");
-			VMMDLL_ConfigSet(this->current_process.vHandle, VMMDLL_OPT_PROCESS_DTB | current_process.PID, 666);
-
-			LOG("[+] Cache initialization complete\n");
 			return true;
 		}
 	}
@@ -603,68 +618,119 @@ bool GameHacker::VirtToPhys(uint64_t va, uint64_t& pa)
 	return false;
 }
 
+std::string get_path() {
+	char buffer[MAX_PATH];
+	GetModuleFileNameA(NULL, buffer, MAX_PATH);
+	std::string::size_type pos = std::string(buffer).find_last_of("\\/");
+	return std::string(buffer).substr(0, ++pos);
+}
+
 bool GameHacker::DumpMemory(uintptr_t address, std::string path)
 {
-	LOG("[!] Memory dumping currently does not rebuild the IAT table, imports will be missing from the dump.\n");
-	IMAGE_DOS_HEADER dos;
-	Read(address, &dos, sizeof(IMAGE_DOS_HEADER));
+	LOG("Dumping memory of process %s\n", this->current_process.process_name.c_str());
 
-	//Check if memory has a PE 
-	if (dos.e_magic != 0x5A4D) //Check if it starts with MZ
+	auto buffer = (BYTE*)malloc(this->current_process.base_size);
+
+	if (!buffer)
 	{
-		LOG("[-] Invalid PE Header\n");
+		LOG("[!] Failed to allocate buffer (Error: %d)\n", GetLastError());
 		return false;
 	}
 
-	IMAGE_NT_HEADERS64 nt;
-	Read(address + dos.e_lfanew, &nt, sizeof(IMAGE_NT_HEADERS64));
-
-	//Sanity check
-	if (nt.Signature != IMAGE_NT_SIGNATURE || nt.OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+	for (ULONG itterator = 0x0; itterator < this->current_process.base_size; itterator += 0x1000)
 	{
-		LOG("[-] Failed signature check\n");
-		return false;
-	}
-	//Shouldn't change ever. so const 
-	const size_t target_size = nt.OptionalHeader.SizeOfImage;
-	//Crashes if we don't make it a ptr :(
-	auto target = std::unique_ptr<uint8_t[]>(new uint8_t[target_size]);
-
-	//Read whole modules memory
-	Read(address, target.get(), target_size);
-	auto nt_header = (PIMAGE_NT_HEADERS64)(target.get() + dos.e_lfanew);
-	auto sections = (PIMAGE_SECTION_HEADER)(target.get() + dos.e_lfanew + FIELD_OFFSET(IMAGE_NT_HEADERS, OptionalHeader) + nt.FileHeader.SizeOfOptionalHeader);
-
-	for (size_t i = 0; i < nt.FileHeader.NumberOfSections; i++, sections++)
-	{
-		//Rewrite the file offsets to the virtual addresses
-		LOG("[!] Rewriting file offsets at 0x%p size 0x%p\n", sections->VirtualAddress, sections->Misc.VirtualSize);
-		sections->PointerToRawData = sections->VirtualAddress;
-		sections->SizeOfRawData = sections->Misc.VirtualSize;
+		if (!Read(this->current_process.base_address + itterator, buffer + itterator, 0x1000))
+		{
+			LOG("[!] Failed to read buffer (Error: %d)\n", GetLastError());
+			free(buffer);
+			return false;
+		}
 	}
 
-	//Rebuild import table
+	auto pdos_header = reinterpret_cast<PIMAGE_DOS_HEADER>(buffer);
 
-	//LOG("[!] Creating new import section\n");
-
-	//Create New Import Section
-
-	//Build new import Table
-
-	//Dump file
-	const auto dumped_file = CreateFileW(std::wstring(path.begin(), path.end()).c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_COMPRESSED, NULL);
-	if (dumped_file == INVALID_HANDLE_VALUE)
+	if (!pdos_header->e_lfanew)
 	{
-		LOG("[!] Failed creating file: %i\n", GetLastError());
+		LOG("[!] Failed to get dos header from buffer\n");
+		free(buffer);
 		return false;
 	}
 
-	if (!WriteFile(dumped_file, target.get(), static_cast<DWORD>(target_size), NULL, NULL))
+	LOG("[+] Dos header readed: %p\n", pdos_header);
+
+	if (pdos_header->e_magic != IMAGE_DOS_SIGNATURE)
 	{
-		LOG("[!] Failed writing file: %i\n", GetLastError());
-		CloseHandle(dumped_file);
+		LOG("[!] Invalid dos header signature\n");
+		free(buffer);
 		return false;
 	}
+
+	auto pnt_header = reinterpret_cast<PIMAGE_NT_HEADERS>(buffer + pdos_header->e_lfanew);
+
+	if (!pnt_header)
+	{
+		LOG("[!] Failed to read nt header from buffer\n");
+		free(buffer);
+		return false;
+	}
+
+	LOG("[+] Nt header read\n");
+
+    if (pnt_header->Signature != IMAGE_NT_SIGNATURE)
+    {
+        LOG("[!] Invalid nt header signature from readed nt header\n");
+        free(buffer);
+        return false;
+    }
+
+    auto poptional_header = reinterpret_cast<PIMAGE_OPTIONAL_HEADER>(&pnt_header->OptionalHeader);
+
+    if (!poptional_header)
+    {
+        LOG("[!] Failed to read optional header from buffer\n");
+        free(buffer);
+        return false;
+    }
+
+    LOG("[+] Optional header readed");
+
+    int i = 0;
+    unsigned int section_offset = poptional_header->SizeOfHeaders;
+
+    for (
+        PIMAGE_SECTION_HEADER psection_header = IMAGE_FIRST_SECTION(pnt_header);
+        i < pnt_header->FileHeader.NumberOfSections;
+        i++, psection_header++
+        )
+    {
+        psection_header->Misc.VirtualSize = psection_header->SizeOfRawData;
+
+        memcpy(buffer + section_offset, psection_header, sizeof(IMAGE_SECTION_HEADER));
+        section_offset += sizeof(IMAGE_SECTION_HEADER);
+
+        if (!Read(
+            poptional_header->ImageBase + psection_header->VirtualAddress,
+            buffer + psection_header->PointerToRawData,
+            psection_header->SizeOfRawData
+        ))
+        {
+            printf("[!] Failed to read buffer from headers\n");
+            free(buffer);
+            return false;
+        }
+    }
+
+    char FileName[MAX_PATH];
+    sprintf_s(FileName, "%s%s_dump.exe", get_path().c_str(), this->current_process.process_name.c_str());
+    
+    std::ofstream Dump(FileName, std::ios::binary);
+    Dump.write((char*)buffer, this->current_process.base_size);
+    Dump.close();
+
+    LOG("[>] Dumped successfully to %s\n", FileName);
+    free(buffer);
+
+    return true;
 }
 
 void Parse(char* combo, char* pattern, char* mask)

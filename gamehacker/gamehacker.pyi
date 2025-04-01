@@ -26,7 +26,7 @@ class GameHacker:
         """
         ...
 
-    def init_fpga(self, process_name: str, memMap: bool = False, debug: bool = False, fixcr3: bool = False) -> bool:
+    def init_fpga(self, process_name: str, memMap: bool = False, debug: bool = False, cache_pml4: bool = False) -> bool:
         """
         Initialize FPGA for memory access.
         
