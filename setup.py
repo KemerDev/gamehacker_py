@@ -103,13 +103,13 @@ package_data = {
 # ===== Wheel Configuration =====
 setup(
     name="gamehacker",
-    version="1.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
-    description="Python DMA C++ library for game memory access",
+    version="0.1.0",
+    author="kemerios2",
+    author_email="kemerios10@gmail.com",
+    description="GameHacker - A high-performance memory manipulation package for game hacking and reverse engineering. Provides direct memory access, pattern scanning, process introspection, and DMA capabilities through FPGA devices. Supports Windows systems with features like scatter read/write, memory dumping, and virtual-to-physical address translation.",
     long_description=open(base_dir / "README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/gamehacker",
+    url="https://github.com/KemerDev/gamehacker_py",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

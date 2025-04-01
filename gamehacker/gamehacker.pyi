@@ -270,7 +270,7 @@ class GameHacker:
         """
         ...
 
-    def add_scatter_read_request(self, handle: int, address: int, size: int, format: str) -> bytes:
+    def add_scatter_read_request(self, handle: int, address: int, size: int) -> bytes:
         """
         Adds a scatter read request.
 
