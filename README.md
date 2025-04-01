@@ -40,7 +40,7 @@ result = gh.find_signature("48 8B 1D ? ? ? ? 48 89 5C 24", info.base_address, in
 print(hex(result)) # 0x30d480
 
 # is_heap false because the offset we are looking is static 
-result = hacker.find_signature("48 8B BF ? ? ? ? 48 8B", info.base_address, info.base_size, False, info.PID)
+result = gh.find_signature("48 8B BF ? ? ? ? 48 8B", info.base_address, info.base_size, False, info.PID)
 
 print(hex(result)) # 0x30d480
 ```
