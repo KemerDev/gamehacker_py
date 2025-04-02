@@ -21,7 +21,7 @@ public:
 
     static inline CurrentProcessInformation current_process { };
 
-    bool InitFPGA(std::string process_name, bool memMap = true, bool debug = false, bool cache_pml4 = false);
+    bool InitFPGA(std::string process_name, bool memMap = true, bool debug = false);
 	void Close();
 
     DWORD GetPidFromName(std::string process_name);
@@ -32,7 +32,7 @@ public:
     uintptr_t GetImportTableAddress(std::string import, std::string process, std::string module);
     bool FixCr3(bool cache_pml4 = false);
     bool VirtToPhys(uint64_t va, uint64_t& pa);
-    bool DumpMemory(const std::string& path = "");
+    bool DumpMemory();
     ULONG64 FindSignature(const char* signature, uint64_t range_start, size_t size, bool heap_function, int PID);
 
     bool Write(uintptr_t address, void* buffer, size_t size) const;

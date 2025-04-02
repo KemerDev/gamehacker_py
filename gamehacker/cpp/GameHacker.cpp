@@ -7,27 +7,27 @@
 std::string GetPydPath() {
     PyObject* sys_module = PyImport_ImportModule("sys");
     if (!sys_module) {
-        LOG("[!] Failed to import sys module\n");
+        THROW("[!] Failed to import sys module\n");
         return "";
     }
 
     PyObject* modules_dict = PyObject_GetAttrString(sys_module, "modules");
     Py_DECREF(sys_module);
     if (!modules_dict) {
-        LOG("[!] Failed to get sys.modules\n");
+        THROW("[!] Failed to get sys.modules\n");
         return "";
     }
 
     PyObject* gamehacker_module = PyDict_GetItemString(modules_dict, "gamehacker");
     Py_DECREF(modules_dict);
     if (!gamehacker_module) {
-        LOG("[!] Failed to find gamehacker module in sys.modules\n");
+        THROW("[!] Failed to find gamehacker module in sys.modules\n");
         return "";
     }
 
     PyObject* file_attr = PyObject_GetAttrString(gamehacker_module, "__file__");
     if (!file_attr) {
-        LOG("[!] Failed to get __file__ attribute of gamehacker module\n");
+        THROW("[!] Failed to get __file__ attribute of gamehacker module\n");
         return "";
     }
 
@@ -35,7 +35,7 @@ std::string GetPydPath() {
     Py_DECREF(file_attr);
 
     if (!file_path) {
-        LOG("[!] Failed to convert __file__ to string\n");
+        THROW("[!] Failed to convert __file__ to string\n");
         return "";
     }
 
@@ -49,7 +49,7 @@ std::string GetPyScriptPath() {
         if (pyFileName && PyUnicode_Check(pyFileName)) {
             std::string script_path = PyUnicode_AsUTF8(pyFileName);
             size_t pos = script_path.find_last_of("\\/");
-            return script_path.substr(0, ++pos);  // Return only the directory
+            return script_path.substr(0, ++pos);
         }
     }
     return "";
@@ -62,9 +62,8 @@ GameHacker::GameHacker() {
     std::string pyd_path = GetPydPath();
     if (!pyd_path.empty()) {
         libs_path = std::filesystem::path(pyd_path).parent_path();
-        LOG("[...] Using DLL path from .pyd location: %s\n", libs_path.string().c_str());
     } else {
-        LOG("[!] Failed to determine .pyd location, falling back to default paths\n");
+        THROW("[!] Failed to determine .pyd location, falling back to default paths\n");
     }
 
     // Try loading DLLs from the determined path
@@ -78,14 +77,8 @@ GameHacker::GameHacker() {
     if (!modules.LEECHCORE) modules.LEECHCORE = LoadLibraryA("leechcore.dll");
 
     if (!modules.VMM || !modules.FTD3XX || !modules.LEECHCORE) {
-        LOG("Failed to load libraries from: %s\n", libs_path.string().c_str());
-        LOG("vmm.dll: %p\n", modules.VMM);
-        LOG("FTD3XX.dll: %p\n", modules.FTD3XX);
-        LOG("leechcore.dll: %p\n", modules.LEECHCORE);
         THROW("[!] Could not load required libraries\n");
     }
-
-    LOG("[+] Libraries loaded successfully from: %s\n", libs_path.string().c_str());
 }
 
 GameHacker::~GameHacker()
@@ -128,7 +121,7 @@ bool GameHacker::DumpMemoryMap(LPCSTR args[], int argc)
 
     if (!handle)
     {
-        LOG("[!] Failed to open VMM handle\n");
+        THROW("[!] Failed to open VMM handle\n");
         return false;
     }
 
@@ -136,14 +129,14 @@ bool GameHacker::DumpMemoryMap(LPCSTR args[], int argc)
 
     if (!VMMDLL_Map_GetPhysMem(handle, &pPhysMemMap))
     {
-        LOG("[!] Failed to get physical memory map\n");
+        THROW("[!] Failed to get physical memory map\n");
         VMMDLL_Close(handle);
         return false;
     }
 
     if (pPhysMemMap->dwVersion != VMMDLL_MAP_PHYSMEM_VERSION)
     {
-        LOG("[!] invalid VMM map version\n");
+        THROW("[!] invalid VMM map version\n");
         VMMDLL_MemFree(pPhysMemMap);
         VMMDLL_Close(handle);
         return false;
@@ -151,7 +144,7 @@ bool GameHacker::DumpMemoryMap(LPCSTR args[], int argc)
 
     if (pPhysMemMap->cMap == 0)
 	{
-		printf("[!] Failed to get physical memory map\n");
+		THROW("[!] Failed to get physical memory map\n");
 		VMMDLL_MemFree(pPhysMemMap);
 		VMMDLL_Close(handle);
 		return false;
@@ -170,7 +163,6 @@ bool GameHacker::DumpMemoryMap(LPCSTR args[], int argc)
     nFile.close();
 
     VMMDLL_MemFree(pPhysMemMap);
-    LOG("Successfully dumped memory map to file!\n");
 
     Sleep(3000);
     VMMDLL_Close(handle);
@@ -188,10 +180,6 @@ bool GameHacker::SetFPGA()
 	VMMDLL_ConfigGet(this->current_process.vHandle, LC_OPT_FPGA_VERSION_MAJOR, &qwVersionMajor);
 	VMMDLL_ConfigGet(this->current_process.vHandle, LC_OPT_FPGA_VERSION_MINOR, &qwVersionMinor);
 
-    LOG("[+] VMMDLL_ConfigGet");
-	LOG(" ID = %lli", qwID);
-	LOG(" VERSION = %lli.%lli\n", qwVersionMajor, qwVersionMinor);
-
     if ((qwVersionMajor >= 4) && ((qwVersionMajor >= 5) || (qwVersionMinor >= 7)))
 	{
 		HANDLE handle;
@@ -199,25 +187,24 @@ bool GameHacker::SetFPGA()
 		handle = LcCreate(&config);
 		if (!handle)
 		{
-			LOG("[!] Failed to create FPGA device\n");
+			THROW("[!] Failed to create FPGA device\n");
 			return false;
 		}
 
 		LcCommand(handle, LC_CMD_FPGA_CFGREGPCIE_MARKWR | 0x002, 4, reinterpret_cast<PBYTE>(&abort2), NULL, NULL);
-		LOG("[-] Register auto cleared\n");
 		LcClose(handle);
 	}
 
 	return true;
 }
 
-bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug, bool cache_pml4)
+bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug)
 {
 
     if (!DMA_INITIALIZED)
     {
         LOG("[...] VMM inizializing...\n");
-    reinit:
+    reInitDma:
         LPCSTR args[] = {const_cast<LPCSTR>(""), const_cast<LPCSTR>("-device"), const_cast<LPCSTR>("fpga://algo=0"), const_cast<LPCSTR>(""), const_cast<LPCSTR>(""), const_cast<LPCSTR>(""), const_cast<LPCSTR>("")};
         DWORD argc = 3;
     
@@ -229,7 +216,6 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug, boo
 
         if (memMap)
         {
-			LOG("[+] Creating mmap.txt\n");
             auto temp_path = std::filesystem::current_path();
             auto path = temp_path / "mmap.txt";
             bool dumped = false;
@@ -244,8 +230,6 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug, boo
             {
                 dumped = true;
             }
-
-            LOG("dumping memory map to file...\n");
 
 			if (!dumped)
 			{
@@ -267,10 +251,10 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug, boo
             if (memMap)
             {
                 memMap = false;
-                goto reinit;
+                goto reInitDma;
             }
 
-            LOG("[!] Initialization failed! Is the DMA in use or disconnected?\n");
+            THROW("[!] Initialization failed! Is the DMA in use or disconnected?\n");
 			return false;
         }
 
@@ -278,14 +262,10 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug, boo
 
         VMMDLL_ConfigGet(this->current_process.vHandle, LC_OPT_FPGA_FPGA_ID, &FPGA_ID);
         VMMDLL_ConfigGet(this->current_process.vHandle, LC_OPT_FPGA_DEVICE_ID, &DEVICE_ID);
-
-        LOG("FPGA ID: %llu\n", FPGA_ID);
-		LOG("DEVICE ID: %llu\n", DEVICE_ID);
-		LOG("success!\n");
         
         if (!this->SetFPGA())
         {
-            LOG("[!] Could not set FPGA\n");
+            THROW("[!] Could not set FPGA\n");
             VMMDLL_Close(this->current_process.vHandle);
             return false;
         }
@@ -306,17 +286,13 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug, boo
     this->current_process.PID = this->GetPidFromName(process_name);
 	if (!this->current_process.PID)
 	{
-		LOG("[!] Could not get PID from name!\n");
+		THROW("[!] Could not get PID from name!\n");
 		return false;
 	}
 
 	this->GetProcessInfo();
 
 	this->current_process.process_name = process_name;
-
-	cache_pml4 ? this->FixCr3(true) : this->FixCr3(false);
-
-	LOG("[...] Getting process information...\n");
 
 	LOG("Process information of %s\n", process_name.c_str());
 	LOG("PID: %i\n", this->current_process.PID);
@@ -332,6 +308,10 @@ DWORD GameHacker::GetPidFromName(std::string process_name)
 {
 	DWORD pid = 0;
 	VMMDLL_PidGetFromName(this->current_process.vHandle, (LPSTR)process_name.c_str(), &pid);
+
+	if (!pid)
+		THROW("[!] Failed to get executable PID\n");
+
 	return pid;
 }
 
@@ -343,7 +323,7 @@ std::vector<int> GameHacker::GetPidListFromName(std::string name)
 
 	if (!VMMDLL_ProcessGetInformationAll(this->current_process.vHandle, &process_info, &total_processes))
 	{
-		LOG("[!] Failed to get process list\n");
+		THROW("[!] Failed to get process list\n");
 		return list;
 	}
 
@@ -363,7 +343,7 @@ std::vector<std::string> GameHacker::GetModuleList(std::string process_name)
 	PVMMDLL_MAP_MODULE module_info;
 	if (!VMMDLL_Map_GetModuleU(this->current_process.vHandle, this->current_process.PID, &module_info, VMMDLL_MODULE_FLAG_NORMAL))
 	{
-		LOG("[!] Failed to get module list\n");
+		THROW("[!] Failed to get module list\n");
 		return list;
 	}
 
@@ -383,7 +363,7 @@ void GameHacker::GetProcessInfo()
 	
 	if (!result)
 	{
-		printf("[!] Failed to get process information\n");
+		THROW("[!] Failed to get process information\n");
         VMMDLL_MemFree(module_entry); 
 		module_entry = NULL;
 		return;
@@ -403,7 +383,7 @@ uintptr_t GameHacker::GetExportTableAddress(std::string import, std::string proc
 	bool result = VMMDLL_Map_GetEATU(this->current_process.vHandle, this->GetPidFromName(process) /*| VMMDLL_PID_PROCESS_WITH_KERNELMEMORY*/, (LPSTR)module.c_str(), &eat_map);
 	if (!result)
 	{
-		LOG("[!] Failed to get Export Table\n");
+		THROW("[!] Failed to get Export Table\n");
 		return 0;
 	}
 
@@ -411,7 +391,7 @@ uintptr_t GameHacker::GetExportTableAddress(std::string import, std::string proc
 	{
 		VMMDLL_MemFree(eat_map);
 		eat_map = NULL;
-		LOG("[!] Invalid VMM Map Version\n");
+		THROW("[!] Invalid VMM Map Version\n");
 		return 0;
 	}
 
@@ -439,7 +419,7 @@ uintptr_t GameHacker::GetImportTableAddress(std::string import, std::string proc
 	bool result = VMMDLL_Map_GetIATU(this->current_process.vHandle, this->GetPidFromName(process) /*| VMMDLL_PID_PROCESS_WITH_KERNELMEMORY*/, (LPSTR)module.c_str(), &iat_map);
 	if (!result)
 	{
-		LOG("[!] Failed to get Import Table\n");
+		THROW("[!] Failed to get Import Table\n");
 		return 0;
 	}
 
@@ -447,7 +427,7 @@ uintptr_t GameHacker::GetImportTableAddress(std::string import, std::string proc
 	{
 		VMMDLL_MemFree(iat_map);
 		iat_map = NULL;
-		LOG("[!] Invalid VMM Map Version\n");
+		THROW("[!] Invalid VMM Map Version\n");
 		return 0;
 	}
 
@@ -497,7 +477,7 @@ bool GameHacker::FixCr3(bool cache_pml4)
 
 	if (!VMMDLL_InitializePlugins(this->current_process.vHandle))
 	{
-		LOG("[-] Failed VMMDLL_InitializePlugins call\n");
+		THROW("[-] Failed VMMDLL_InitializePlugins call\n");
 		return false;
 	}
 
@@ -561,40 +541,32 @@ bool GameHacker::FixCr3(bool cache_pml4)
 
 		if (result)
 		{
-			LOG("[+] Patched DTB\n");
-
 			if (cache_pml4)
 			{
 				static ULONG64 pml4_first[512];
 				static ULONG64 pml4_second[512];
 				DWORD readsize;
 	
-				LOG("[+] Reading PML4 table from DTB: 0x%llx\n", dtb);
 	
 				if (!VMMDLL_MemReadEx(this->current_process.vHandle, -1, dtb, reinterpret_cast<PBYTE>(pml4_first), sizeof(pml4_first), (PDWORD)&readsize,
 					VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
-					LOG("[!] Failed to read PML4 the first time\n");
+					THROW("[!] Failed to read PML4 the first time\n");
 					return false;
 				}
-				LOG("[+] First PML4 read successful, size: %d\n", readsize);
 	
 				if (!VMMDLL_MemReadEx(this->current_process.vHandle, -1, dtb, reinterpret_cast<PBYTE>(pml4_second), sizeof(pml4_second), (PDWORD)&readsize,
 					VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO)) {
-					LOG("[!] Failed to read PML4 the second time\n");
+					THROW("[!] Failed to read PML4 the second time\n");
 					return false;
 				}
-				LOG("[+] Second PML4 read successful, size: %d\n", readsize);
 	
 				if (memcmp(pml4_first, pml4_second, sizeof(pml4_first)) != 0) {
-					LOG("[!] PML4 mismatch between reads\n");
+					THROW("[!] PML4 mismatch between reads\n");
 					return false;
 				}
-				LOG("[+] PML4 verification successful, tables match\n");
 	
-				LOG("[+] Setting up PML4 cache\n");
 				VMMDLL_MemReadEx((VMM_HANDLE)-666, 333, (ULONG64)pml4_first, 0, 0, 0, 0);
 	
-				LOG("[+] Configuring process DTB\n");
 				VMMDLL_ConfigSet(this->current_process.vHandle, VMMDLL_OPT_PROCESS_DTB | this->current_process.PID, 666);
 	
 				LOG("[+] Cache initialization complete\n");
@@ -615,64 +587,46 @@ bool GameHacker::VirtToPhys(uint64_t va, uint64_t& pa)
 	if (VMMDLL_MemVirt2Phys(this->current_process.vHandle, this->current_process.PID, va, &pa)) {
 		return true;
 	}
+
+	THROW("[!] VMMDLL_MemVirt2Phys failed\n");
 	return false;
 }
 
-bool GameHacker::DumpMemory(const std::string& path)
+bool GameHacker::DumpMemory()
 {
 	LOG("Dumping memory of process %s\n", this->current_process.process_name.c_str());
 
-	auto buffer = (BYTE*)malloc(this->current_process.base_size);
-
-	if (!buffer)
+	if (!this->dump)
 	{
-		LOG("[!] Failed to allocate buffer (Error: %d)\n", GetLastError());
-		return false;
+		this->dump = new BYTE[this->current_process.base_size];
+		VMMDLL_MemReadEx(this->current_process.vHandle, this->current_process.PID, this->current_process.base_address, this->dump, this->current_process.base_size, 0, VMMDLL_FLAG_NOCACHE);
 	}
 
-	for (ULONG itterator = 0x0; itterator < this->current_process.base_size; itterator += 0x1000)
-	{
-		if (!Read(this->current_process.base_address + itterator, buffer + itterator, 0x1000))
-		{
-			LOG("[!] Failed to read buffer (Error: %d)\n", GetLastError());
-			free(buffer);
-			return false;
-		}
-	}
-
-	auto pdos_header = reinterpret_cast<PIMAGE_DOS_HEADER>(buffer);
+	auto pdos_header = reinterpret_cast<PIMAGE_DOS_HEADER>(this->dump);
 
 	if (!pdos_header->e_lfanew)
 	{
-		LOG("[!] Failed to get dos header from buffer\n");
-		free(buffer);
+		THROW("[!] Failed to get dos header from buffer\n");
 		return false;
 	}
-
-	LOG("[+] Dos header readed: %p\n", pdos_header);
 
 	if (pdos_header->e_magic != IMAGE_DOS_SIGNATURE)
 	{
-		LOG("[!] Invalid dos header signature\n");
-		free(buffer);
+		THROW("[!] Invalid dos header signature\n");
 		return false;
 	}
 
-	auto pnt_header = reinterpret_cast<PIMAGE_NT_HEADERS>(buffer + pdos_header->e_lfanew);
+	auto pnt_header = reinterpret_cast<PIMAGE_NT_HEADERS>(this->dump + pdos_header->e_lfanew);
 
 	if (!pnt_header)
 	{
-		LOG("[!] Failed to read nt header from buffer\n");
-		free(buffer);
+		THROW("[!] Failed to read nt header from buffer\n");
 		return false;
 	}
 
-	LOG("[+] Nt header read\n");
-
     if (pnt_header->Signature != IMAGE_NT_SIGNATURE)
     {
-        LOG("[!] Invalid nt header signature from readed nt header\n");
-        free(buffer);
+        THROW("[!] Invalid nt header signature from readed nt header\n");
         return false;
     }
 
@@ -680,12 +634,9 @@ bool GameHacker::DumpMemory(const std::string& path)
 
     if (!poptional_header)
     {
-        LOG("[!] Failed to read optional header from buffer\n");
-        free(buffer);
+        THROW("[!] Failed to read optional header from buffer\n");
         return false;
     }
-
-    LOG("[+] Optional header readed");
 
     int i = 0;
     unsigned int section_offset = poptional_header->SizeOfHeaders;
@@ -698,45 +649,28 @@ bool GameHacker::DumpMemory(const std::string& path)
     {
         psection_header->Misc.VirtualSize = psection_header->SizeOfRawData;
 
-        memcpy(buffer + section_offset, psection_header, sizeof(IMAGE_SECTION_HEADER));
+        memcpy(this->dump + section_offset, psection_header, sizeof(IMAGE_SECTION_HEADER));
         section_offset += sizeof(IMAGE_SECTION_HEADER);
 
         if (!Read(
             poptional_header->ImageBase + psection_header->VirtualAddress,
-            buffer + psection_header->PointerToRawData,
+            this->dump + psection_header->PointerToRawData,
             psection_header->SizeOfRawData
         ))
         {
-            printf("[!] Failed to read buffer from headers\n");
-            free(buffer);
+            THROW("[!] Failed to read buffer from headers\n");
             return false;
         }
     }
 
-	std::string dumpPath;
-
-	if (!path.empty())
-	{
-		dumpPath = path;
-	}
-	else
-	{
-		dumpPath = GetPyScriptPath();
-	}
-
-	if (dumpPath.back() != '\\' && dumpPath.back() != '/') {
-		dumpPath += "\\";
-	}
-
     char FileName[MAX_PATH];
-    sprintf_s(FileName, "%s%s_dump.exe", dumpPath.c_str(), this->current_process.process_name.c_str());
+    sprintf_s(FileName, "%s%s_dump.exe", GetPyScriptPath().c_str(), this->current_process.process_name.c_str());
     
     std::ofstream Dump(FileName, std::ios::binary);
-    Dump.write((char*)buffer, this->current_process.base_size);
+    Dump.write((char*)this->dump, this->current_process.base_size);
     Dump.close();
 
     LOG("[>] Dumped successfully to %s\n", FileName);
-    free(buffer);
 
     return true;
 }
@@ -851,7 +785,7 @@ ULONG64 GameHacker::FindSignature(const char* signature, uint64_t range_start, s
 	}
 	else
 	{
-		LOG("[-] Failed to find signature\n");
+		THROW("[-] Failed to find signature\n");
 		delete[] this->dump;
 		return 0;
 	}
@@ -907,7 +841,7 @@ VMMDLL_SCATTER_HANDLE GameHacker::CreateScatterHandle()
 {
 	VMMDLL_SCATTER_HANDLE ScatterHandle = VMMDLL_Scatter_Initialize(this->current_process.vHandle, this->current_process.PID, VMMDLL_FLAG_NOCACHE);
 	if (!ScatterHandle)
-		LOG("[!] Failed to create scatter handle\n");
+		THROW("[!] Failed to create scatter handle\n");
 	return ScatterHandle;
 }
 
@@ -915,7 +849,7 @@ VMMDLL_SCATTER_HANDLE GameHacker::CreateScatterHandle(int pid)
 {
 	VMMDLL_SCATTER_HANDLE ScatterHandle = VMMDLL_Scatter_Initialize(this->current_process.vHandle, pid, VMMDLL_FLAG_NOCACHE);
 	if (!ScatterHandle)
-		LOG("[!] Failed to create scatter handle\n");
+		THROW("[!] Failed to create scatter handle\n");
 	return ScatterHandle;
 }
 
