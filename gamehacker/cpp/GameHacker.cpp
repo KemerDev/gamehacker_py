@@ -220,8 +220,6 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug)
             auto path = temp_path / "mmap.txt";
             bool dumped = false;
 
-			LOG("%s\n", path.string().c_str());
-
             if (!std::filesystem::exists(path))
             {
                 dumped = this->DumpMemoryMap(args, argc);
@@ -234,11 +232,11 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug)
 			if (!dumped)
 			{
 				LOG("[!] ERROR: Could not dump memory map!\n");
-				LOG("Defaulting to no memory map!\n");
+				LOG("[!] Defaulting to no memory map!\n");
 			}
 			else
 			{
-				LOG("Dumped memory map!\n");
+				LOG("[+] Dumped memory map!\n");
 				args[argc++] = const_cast<LPSTR>("-memmap");
 				args[argc++] = const_cast<LPSTR>(path.string().c_str());
 			}
@@ -274,12 +272,12 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug)
     }
     else
     {
-        LOG("DMA already initialized\n");
+        LOG("[+] DMA already initialized\n");
     }
 
     if (PROCESS_INITIALIZED)
     {
-        LOG("Process already initialized\n");
+        LOG("[+] Process already initialized\n");
         return true;
     }
 
@@ -294,12 +292,18 @@ bool GameHacker::InitFPGA(std::string process_name, bool memMap, bool debug)
 
 	this->current_process.process_name = process_name;
 
-	LOG("Process information of %s\n", process_name.c_str());
-	LOG("PID: %i\n", this->current_process.PID);
-	LOG("Base Address: 0x%p\n", this->current_process.base_address);
-	LOG("Base Size: 0x%p\n", this->current_process.base_size);
+	LOG("[+] Process information of %s\n", process_name.c_str());
+	LOG("  - PID: %i\n", this->current_process.PID);
+	LOG("  - Base Address: 0x%p\n", this->current_process.base_address);
+	LOG("  - Base Size: 0x%p\n", this->current_process.base_size);
 
 	PROCESS_INITIALIZED = TRUE;
+
+	if (!this->dump)
+	{
+		this->dump = new BYTE[this->current_process.base_size];
+		VMMDLL_MemReadEx(this->current_process.vHandle, this->current_process.PID, this->current_process.base_address, this->dump, this->current_process.base_size, 0, VMMDLL_FLAG_NOCACHE);
+	}
 
 	return true;
 }
@@ -724,8 +728,8 @@ char* ScanBasic(char* pattern, char* mask, char* begin, intptr_t size)
 
 char* Scan(char* signature, char* begin, size_t size)
 {
-	char pattern[1000];
-	char mask[1000];
+	char pattern[10000];
+	char mask[10000];
 	Parse(signature, pattern, mask);
 	return ScanBasic(pattern, mask, begin, size);
 }
@@ -767,14 +771,8 @@ uint32_t FindOffset(char* result, int wildCardIndex)
 	return *(uint32_t*)(result + wildCardIndex);
 }
 
-ULONG64 GameHacker::FindSignature(const char* signature, uint64_t range_start, size_t size, bool heap_function, int PID)
+ULONG64 GameHacker::FindSignature(const char* signature, size_t size, bool heap_function)
 {
-	if (!this->dump)
-	{
-		this->dump = new BYTE[size];
-		VMMDLL_MemReadEx(this->current_process.vHandle, PID, range_start, this->dump, size, 0, VMMDLL_FLAG_NOCACHE);
-	}
-
 	auto result = Scan((char*)signature, (char*)this->dump, size);
 
 	int wildcardIndex = FindFirstWildcardByteIndex(signature);

@@ -141,7 +141,7 @@ class GameHacker:
         """
         ...
 
-    def find_signature(self, signature: str, range_start: int, size: int, is_heap: bool, pid: int) -> int:
+    def find_signature(self, signature: str, size: int, is_heap: bool) -> int:
         """
         Scans a memory region for a given signature and returns the found offset or address.
 
@@ -169,7 +169,6 @@ class GameHacker:
         
         Args:
             address: Source address
-            buffer: Buffer to store data
             size: Size to read
             pid: Source process ID (0 = current)
             
@@ -184,7 +183,6 @@ class GameHacker:
         
         Args:
             address: Source address
-            buffer: Buffer to store data
             size: Size to read
             pid: Source process ID (0 = current)
             

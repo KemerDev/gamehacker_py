@@ -33,7 +33,7 @@ public:
     bool FixCr3(bool cache_pml4 = false);
     bool VirtToPhys(uint64_t va, uint64_t& pa);
     bool DumpMemory();
-    ULONG64 FindSignature(const char* signature, uint64_t range_start, size_t size, bool heap_function, int PID);
+    ULONG64 FindSignature(const char* signature, size_t size, bool heap_function);
 
     bool Write(uintptr_t address, void* buffer, size_t size) const;
 	bool Write(uintptr_t address, void* buffer, size_t size, int pid) const;
